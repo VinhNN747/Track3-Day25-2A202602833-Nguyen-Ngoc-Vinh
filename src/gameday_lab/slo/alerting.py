@@ -50,12 +50,19 @@ class WindowSums:
 
     def __init__(self, values: list[int]) -> None:
         """TODO(student): build the prefix-sum list (prefix[0] = 0)."""
-        raise NotImplementedError("TODO(student): WindowSums.__init__()")
+        self.values = values
+        self.prefix = [0]
+        for value in values:
+            self.prefix.append(self.prefix[-1] + value)
 
     def sum(self, end_inclusive: int, length: int) -> int:
         """TODO(student): sum of values[end_inclusive - length + 1 .. end_inclusive],
         clipped at index 0 when the window starts before the data."""
-        raise NotImplementedError("TODO(student): WindowSums.sum()")
+        if end_inclusive < 0 or length <= 0:
+            return 0
+        end = min(end_inclusive + 1, len(self.values))
+        start = max(0, end - length)
+        return self.prefix[end] - self.prefix[start]
 
 
 class BurnRateAlerter:
@@ -67,7 +74,10 @@ class BurnRateAlerter:
 
     def burn_rate(self, total: WindowSums, bad: WindowSums, end: int, length: int) -> float:
         """TODO(student): (bad / total over the window) / (1 - slo); 0.0 if total is 0."""
-        raise NotImplementedError("TODO(student): burn_rate()")
+        requests = total.sum(end, length)
+        if requests == 0:
+            return 0.0
+        return (bad.sum(end, length) / requests) / (1.0 - self.slo)
 
     def evaluate(self, total: list[int], bad: list[int]) -> list[AlertEvent]:
         """TODO(student): one AlertEvent per contiguous firing episode of each rule.
@@ -77,7 +87,23 @@ class BurnRateAlerter:
         An episode starts at the first firing minute and ends (exclusive) at the
         first minute it stops firing (or len(total)). Sort by start_min.
         """
-        raise NotImplementedError("TODO(student): evaluate()")
+        if len(total) != len(bad):
+            raise ValueError("total and bad must have the same length")
+        totals, errors = WindowSums(total), WindowSums(bad)
+        events: list[AlertEvent] = []
+        for rule in self.rules:
+            start: int | None = None
+            for minute in range(len(total)):
+                firing = (self.burn_rate(totals, errors, minute, rule.long_min) >= rule.burn_rate
+                           and self.burn_rate(totals, errors, minute, rule.short_min) >= rule.burn_rate)
+                if firing and start is None:
+                    start = minute
+                elif not firing and start is not None:
+                    events.append(AlertEvent(rule.name, rule.severity, start, minute))
+                    start = None
+            if start is not None:
+                events.append(AlertEvent(rule.name, rule.severity, start, len(total)))
+        return sorted(events, key=lambda event: (event.start_min, event.rule))
 
 
 def error_budget_report(total: list[int], bad: list[int], slo: float = 0.995) -> dict[str, float | bool]:
@@ -92,4 +118,20 @@ def error_budget_report(total: list[int], bad: list[int], slo: float = 0.995) ->
       budget_remaining  1 - budget_consumed             (round to 4 decimals)
       freeze_releases   True when nothing is left (budget_remaining <= 0)
     """
-    raise NotImplementedError("TODO(student): error_budget_report()")
+    if len(total) != len(bad):
+        raise ValueError("total and bad must have the same length")
+    requests = sum(total)
+    bad_count = sum(bad)
+    allowed = (1.0 - slo) * requests
+    consumed = bad_count / allowed if allowed else 0.0
+    remaining = 1.0 - consumed
+    availability = 1.0 - bad_count / requests if requests else 0.0
+    return {
+        "requests": requests,
+        "allowed_bad": round(allowed, 1),
+        "bad": bad_count,
+        "availability": round(availability, 6),
+        "budget_consumed": round(consumed, 4),
+        "budget_remaining": round(remaining, 4),
+        "freeze_releases": remaining <= 0,
+    }
