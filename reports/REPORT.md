@@ -1,6 +1,6 @@
 # Lab 25B — Report
 
-**Họ tên / nhóm:** Nguyễn Ngọc Vĩnh · **Commit:** pending local commit · **Điểm tự động (`make grade`):** 84 / 88
+**Họ tên / nhóm:** Nguyễn Ngọc Vĩnh · **Commit:** e2636f9f4872d98d5cc3b59ee2f3fda1ba069432 · **Điểm tự động (`make grade`):** 84 / 88
 
 ## 1. Kết quả Game Day
 
